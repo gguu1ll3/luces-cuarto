@@ -1,65 +1,63 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Luces Cuarto</title>
+    <title>Control LED Cuarto</title>
     <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background: #121212;
-            color: white;
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            background: #0f0f0f; 
+            color: white; 
+            margin: 0;
         }
-
-        .card {
-            background: #1e1e1e;
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        .card { 
+            background: #1a1a1a; 
+            padding: 2.5rem; 
+            border-radius: 25px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.7); 
             text-align: center;
+            border: 1px solid #333;
+            width: 80%;
+            max-width: 350px;
         }
-
-        button {
-            padding: 15px 30px;
-            font-size: 18px;
-            border: none;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: 0.3s;
-            margin: 10px;
-            font-weight: bold;
+        h2 { margin-bottom: 1.5rem; color: #00d4ff; }
+        button { 
+            width: 100%;
+            padding: 15px; 
+            font-size: 16px; 
+            border: none; 
+            border-radius: 12px; 
+            cursor: pointer; 
+            transition: all 0.2s; 
+            margin: 10px 0; 
+            font-weight: bold; 
+            text-transform: uppercase;
         }
-
-        .btn-connect {
-            background: #007bff;
-            color: white;
-        }
-
-        .btn-off {
-            background: #ff4757;
-            color: white;
-        }
-
-        .status {
-            margin-top: 20px;
-            font-size: 14px;
-            color: #888;
+        .btn-connect { background: #007bff; color: white; }
+        .btn-connect:active { transform: scale(0.98); background: #0056b3; }
+        .btn-off { background: #e84118; color: white; }
+        .btn-off:active { transform: scale(0.98); background: #c23616; }
+        .status { 
+            margin-top: 20px; 
+            font-size: 13px; 
+            color: #aaa; 
+            background: #252525;
+            padding: 8px;
+            border-radius: 8px;
         }
     </style>
 </head>
-
 <body>
 
     <div class="card">
-        <h2>Control de Luces</h2>
-        <button class="btn-connect" onclick="connectBLE()">1. Conectar Luces</button>
-        <br>
+        <h2>Mi Luz LED</h2>
+        <button class="btn-connect" onclick="connectBLE()">1. Buscar y Conectar</button>
         <button class="btn-off" onclick="turnOff()">2. Apagar Luces</button>
         <div class="status" id="status">Estado: Desconectado</div>
     </div>
@@ -68,30 +66,35 @@
         let deviceCache = null;
         let characteristicCache = null;
 
-        // Estos son los comandos comunes para controladores Bluetooth LED genéricos
-        const OFF_COMMAND = new Uint8Array([0xcc, 0x24, 0x33]); // Comando estándar "OFF"
+        // Comando estándar de apagado para LotusLamp / BLEDOM
+        const OFF_COMMAND = new Uint8Array([0xcc, 0x24, 0x33]);
 
-       async function connectBLE() {
-    try {
-        // Esta versión pide CUALQUIER dispositivo cercano, sin filtros
-        const device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: [0xFFD0, 0xFFE0, 0xFFF0, '0000ffd0-0000-1000-8000-00805f9b34fb']
-        });
+        async function connectBLE() {
+            const statusLabel = document.getElementById('status');
+            try {
+                statusLabel.innerText = "Buscando...";
+                
+                // Pedimos cualquier dispositivo para que no haya filtros que bloqueen
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        0xFFD0, 0xFFE0, 0xFFF0, 0x7777,
+                        '0000ffd0-0000-1000-8000-00805f9b34fb',
+                        '0000ffe0-0000-1000-8000-00805f9b34fb'
+                    ]
+                });
 
-        const server = await device.gatt.connect();
-        document.getElementById('status').innerText = "Buscando servicio...";
+                statusLabel.innerText = "Conectando a " + device.name + "...";
+                const server = await device.gatt.connect();
 
-        // Intentamos encontrar el servicio compatible
-        const services = await server.getPrimaryServices();
-        const service = services[0]; // Tomamos el primero que responda
-        const characteristics = await service.getCharacteristics();
-        characteristicCache = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
-
-        document.getElementById('status').innerText = "Conectado a: " + device.name;
-        deviceCache = device;
-    } catch (error) {
-        console.log(error);
-        document.getElementById('status').innerText = "Error: " + error.message;
-    }
-}
+                // Intentamos encontrar el servicio de escritura automáticamente
+                statusLabel.innerText = "Buscando canales...";
+                const services = await server.getPrimaryServices();
+                
+                for (const service of services) {
+                    const characteristics = await service.getCharacteristics();
+                    // Buscamos una característica que permita escritura
+                    const writable = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+                    if (writable) {
+                        characteristicCache = writable;
+                        break;
