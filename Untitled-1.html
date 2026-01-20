@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Luces Cuarto</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #121212;
+            color: white;
+        }
+
+        .card {
+            background: #1e1e1e;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: 0.3s;
+            margin: 10px;
+            font-weight: bold;
+        }
+
+        .btn-connect {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-off {
+            background: #ff4757;
+            color: white;
+        }
+
+        .status {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card">
+        <h2>Control de Luces</h2>
+        <button class="btn-connect" onclick="connectBLE()">1. Conectar Luces</button>
+        <br>
+        <button class="btn-off" onclick="turnOff()">2. Apagar Luces</button>
+        <div class="status" id="status">Estado: Desconectado</div>
+    </div>
+
+    <script>
+        let deviceCache = null;
+        let characteristicCache = null;
+
+        // Estos son los comandos comunes para controladores Bluetooth LED genéricos
+        const OFF_COMMAND = new Uint8Array([0xcc, 0x24, 0x33]); // Comando estándar "OFF"
+
+        async function connectBLE() {
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'ELK-' }, { namePrefix: 'Triones' }, { namePrefix: 'Lotus' }],
+                    optionalServices: [0xFFD0, 0xFFE0, '0000ffd0-0000-1000-8000-00805f9b34fb']
+                });
+
+                const server = await device.gatt.connect();
+                // Buscamos el servicio de escritura (varía según el modelo exacto)
+                const service = await server.getPrimaryService(0xFFD0);
+                characteristicCache = await service.getCharacteristic(0xFFD1);
+
+                document.getElementById('status').innerText = "Estado: Conectado a " + device.name;
+                deviceCache = device;
+            } catch (error) {
+                console.log(error);
+                alert("Error al conectar: " + error);
+            }
+        }
+
+        async function turnOff() {
+            if (!characteristicCache) {
+                alert("Primero conecta las luces");
+                return;
+            }
+            try {
+                await characteristicCache.writeValue(OFF_COMMAND);
+                document.getElementById('status').innerText = "Estado: Luces Apagadas";
+            } catch (error) {
+                alert("Error al enviar comando: " + error);
+            }
+        }
+    </script>
+</body>
+
+</html>
