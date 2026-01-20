@@ -71,39 +71,27 @@
         // Estos son los comandos comunes para controladores Bluetooth LED genéricos
         const OFF_COMMAND = new Uint8Array([0xcc, 0x24, 0x33]); // Comando estándar "OFF"
 
-        async function connectBLE() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: 'ELK-' }, { namePrefix: 'Triones' }, { namePrefix: 'Lotus' }],
-                    optionalServices: [0xFFD0, 0xFFE0, '0000ffd0-0000-1000-8000-00805f9b34fb']
-                });
+       async function connectBLE() {
+    try {
+        // Esta versión pide CUALQUIER dispositivo cercano, sin filtros
+        const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [0xFFD0, 0xFFE0, 0xFFF0, '0000ffd0-0000-1000-8000-00805f9b34fb']
+        });
 
-                const server = await device.gatt.connect();
-                // Buscamos el servicio de escritura (varía según el modelo exacto)
-                const service = await server.getPrimaryService(0xFFD0);
-                characteristicCache = await service.getCharacteristic(0xFFD1);
+        const server = await device.gatt.connect();
+        document.getElementById('status').innerText = "Buscando servicio...";
 
-                document.getElementById('status').innerText = "Estado: Conectado a " + device.name;
-                deviceCache = device;
-            } catch (error) {
-                console.log(error);
-                alert("Error al conectar: " + error);
-            }
-        }
+        // Intentamos encontrar el servicio compatible
+        const services = await server.getPrimaryServices();
+        const service = services[0]; // Tomamos el primero que responda
+        const characteristics = await service.getCharacteristics();
+        characteristicCache = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
 
-        async function turnOff() {
-            if (!characteristicCache) {
-                alert("Primero conecta las luces");
-                return;
-            }
-            try {
-                await characteristicCache.writeValue(OFF_COMMAND);
-                document.getElementById('status').innerText = "Estado: Luces Apagadas";
-            } catch (error) {
-                alert("Error al enviar comando: " + error);
-            }
-        }
-    </script>
-</body>
-
-</html>
+        document.getElementById('status').innerText = "Conectado a: " + device.name;
+        deviceCache = device;
+    } catch (error) {
+        console.log(error);
+        document.getElementById('status').innerText = "Error: " + error.message;
+    }
+}
